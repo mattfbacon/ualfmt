@@ -12,7 +12,7 @@ pub enum Token {
 	#[regex(r"\.[a-zA-Z_][a-zA-Z_0-9]*")]
 	Directive,
 
-	#[regex(r"[a-zA-Z_][a-zA-Z_0-9]*")]
+	#[regex(r"[a-zA-Z_][a-zA-Z_0-9.]*")]
 	#[token(".")]
 	Identifier,
 

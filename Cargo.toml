@@ -5,6 +5,5 @@ resolver = "2"
 version = "0.1.0"
 
 [dependencies]
-lasso = "0.6"
 logos = "0.12"
 nom = "7"

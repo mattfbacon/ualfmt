@@ -19,7 +19,6 @@
 
 use std::io::Read as _;
 
-use lasso::{MiniSpur, Resolver, Rodeo};
 use logos::Logos as _;
 
 use self::interspersed::{AroundOrBetween, Interspersed};
@@ -36,8 +35,6 @@ mod whitespace;
 type Tokens = Interspersed<Whitespace, (Token, Span)>;
 
 fn main() {
-	let mut interner = Rodeo::<MiniSpur>::new();
-
 	let mut input = String::new();
 	std::io::stdin().lock().read_to_string(&mut input).unwrap();
 
@@ -62,13 +59,12 @@ fn main() {
 			start: prev_end,
 			end: span.start,
 		};
-		let whitespace_before = Whitespace::of(&mut interner, &input[whitespace_before]);
+		let whitespace_before = Whitespace::from_text(&input[whitespace_before]);
 		tokens.push((whitespace_before, (token, span)));
 		prev_end = span.end;
 	}
 
-	let last_whitespace = Whitespace::of(
-		&mut interner,
+	let last_whitespace = Whitespace::from_text(
 		&input[Span {
 			start: prev_end,
 			end: input.len().try_into().unwrap(),
@@ -79,9 +75,9 @@ fn main() {
 
 	retag_labels(&mut tokens);
 
-	format::format(&mut interner, &mut tokens, &input);
+	format::format(&mut tokens, &input);
 
-	write(std::io::stdout().lock(), &interner, &input, &tokens).unwrap();
+	write(std::io::stdout().lock(), &input, &tokens).unwrap();
 }
 
 fn retag_labels(tokens: &mut Tokens) {
@@ -93,15 +89,10 @@ fn retag_labels(tokens: &mut Tokens) {
 	}
 }
 
-fn write(
-	mut writer: impl std::io::Write,
-	interner: &impl Resolver<MiniSpur>,
-	source: &str,
-	tokens: &Tokens,
-) -> std::io::Result<()> {
+fn write(mut writer: impl std::io::Write, source: &str, tokens: &Tokens) -> std::io::Result<()> {
 	tokens.iter_all().try_for_each(|item| {
 		let text = match item {
-			AroundOrBetween::Around(whitespace) => whitespace.text(interner),
+			AroundOrBetween::Around(whitespace) => whitespace.text(),
 			AroundOrBetween::Between((_token, span)) => &source[*span],
 		};
 		writer.write_all(text.as_bytes())

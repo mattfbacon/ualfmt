@@ -1,8 +1,2 @@
-[package]
-edition = "2021"
-name = "ualfmt"
-resolver = "2"
-version = "0.1.0"
-
-[dependencies]
-logos = "0.12"
+[workspace]
+members = ["bin", "lib"]

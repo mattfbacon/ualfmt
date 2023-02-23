@@ -20,22 +20,23 @@
 use logos::Logos as _;
 
 use self::interspersed::{AroundOrBetween, Interspersed};
-use self::span::{Location, Span};
+pub use self::span::Span;
 use self::token::Token;
 use self::whitespace::Whitespace;
 
 mod format;
 mod interspersed;
 mod span;
+#[cfg(test)]
+mod tests;
 mod token;
 mod whitespace;
 
 type Tokens = Interspersed<Whitespace, (Token, Span)>;
 
 #[derive(Debug, Clone, Copy)]
-pub struct Error<'a> {
-	pub location: Location,
-	pub problem_text: &'a str,
+pub struct Error {
+	pub span: Span,
 }
 
 /// Format the given ARM assembly string.
@@ -47,7 +48,7 @@ pub struct Error<'a> {
 /// # Panics
 ///
 /// If the source is longer than about 4 GB (`u32::MAX`).
-pub fn format(source: &str) -> Result<String, Error<'_>> {
+pub fn format(source: &str) -> Result<String, Error> {
 	let lexer = Token::lexer(source)
 		.spanned()
 		.map(|(token, span)| (token, span::Span::from(span)));
@@ -57,10 +58,7 @@ pub fn format(source: &str) -> Result<String, Error<'_>> {
 	let mut prev_end = 0;
 	for (token, span) in lexer {
 		if token == Token::Error {
-			return Err(Error {
-				location: span.start,
-				problem_text: &source[span],
-			});
+			return Err(Error { span });
 		}
 
 		let whitespace_before = Span {

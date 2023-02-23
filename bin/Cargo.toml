@@ -1,0 +1,9 @@
+[package]
+edition = "2021"
+name = "ualfmt"
+version = "0.1.0"
+
+[dependencies]
+argh = "0.1"
+ariadne = "0.1"
+ualfmt-lib = { path = "../lib" }

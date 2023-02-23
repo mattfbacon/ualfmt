@@ -47,7 +47,7 @@ impl Action {
 }
 
 pub fn format(tokens: &mut Tokens, source: &str) {
-	for arounds in tokens.arounds_mut() {
+	tokens.arounds_mut().for_each(|arounds| {
 		let (before, whitespace, after) = arounds.into_tuple();
 		let action = match (before, after) {
 			// files that are only whitespace
@@ -66,7 +66,7 @@ pub fn format(tokens: &mut Tokens, source: &str) {
 				end: after.map_or(source.len().try_into().unwrap(), |(_, span)| span.start),
 			},
 		);
-	}
+	});
 }
 
 fn format_initial(token: Token) -> Action {

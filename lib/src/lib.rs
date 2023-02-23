@@ -49,14 +49,16 @@ pub struct Error {
 ///
 /// If the source is longer than about 4 GB (`u32::MAX`).
 pub fn format(source: &str) -> Result<String, Error> {
-	let lexer = Token::lexer(source)
-		.spanned()
-		.map(|(token, span)| (token, span::Span::from(span)));
+	assert!(source.len() < u32::MAX as usize);
 
-	let mut tokens = Vec::new();
+	let mut lexer = Token::lexer(source).spanned();
+
+	let mut tokens = Vec::with_capacity(source.len() / 5);
 
 	let mut prev_end = 0;
-	for (token, span) in lexer {
+	lexer.try_for_each(|(token, span)| {
+		let span = span::Span::from(span);
+
 		if token == Token::Error {
 			return Err(Error { span });
 		}
@@ -68,7 +70,8 @@ pub fn format(source: &str) -> Result<String, Error> {
 		let whitespace_before = Whitespace::from_text(&source[whitespace_before]);
 		tokens.push((whitespace_before, (token, span)));
 		prev_end = span.end;
-	}
+		Ok(())
+	})?;
 
 	let last_whitespace = Whitespace::from_text(
 		&source[Span {
@@ -83,7 +86,7 @@ pub fn format(source: &str) -> Result<String, Error> {
 
 	format::format(&mut tokens, source);
 
-	let mut output = String::new();
+	let mut output = String::with_capacity(source.len() / 2);
 	write(&mut output, source, &tokens);
 	Ok(output)
 }

@@ -30,12 +30,32 @@ trait ClampExt: Ord + Copy {
 
 impl<T: Ord + Copy> ClampExt for T {}
 
+fn from_text_hot(text: &str) -> Option<Whitespace> {
+	use Whitespace as W;
+
+	Some(match text {
+		"" => W::Empty,
+		" " => W::OneSpace,
+		"  " => W::TwoSpaces,
+		"\t" => W::Tab,
+		"\n" => W::Newline,
+		"\n\t" => W::NewlineTab,
+		"\n\n" => W::TwoNewlines,
+		"\n\n\t" => W::TwoNewlinesTab,
+		_ => return None,
+	})
+}
+
 impl Whitespace {
 	pub fn is_empty(self) -> bool {
 		self == Self::Empty
 	}
 
 	pub fn from_text(text: &str) -> Self {
+		if let Some(hot) = from_text_hot(text) {
+			return hot;
+		}
+
 		let newlines = text.bytes().filter(|&b| b == b'\n').count();
 		if newlines == 0 {
 			let indentation = text.bytes().rev().take_while(|&b| b == b'\t').count();

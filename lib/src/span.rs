@@ -10,8 +10,8 @@ pub struct Span {
 impl From<std::ops::Range<usize>> for Span {
 	fn from(range: std::ops::Range<usize>) -> Self {
 		Self {
-			start: range.start.try_into().unwrap(),
-			end: range.end.try_into().unwrap(),
+			start: range.start as u32,
+			end: range.end as u32,
 		}
 	}
 }
@@ -19,8 +19,8 @@ impl From<std::ops::Range<usize>> for Span {
 impl From<Span> for std::ops::Range<usize> {
 	fn from(range: Span) -> Self {
 		Self {
-			start: range.start.try_into().unwrap(),
-			end: range.end.try_into().unwrap(),
+			start: range.start as usize,
+			end: range.end as usize,
 		}
 	}
 }

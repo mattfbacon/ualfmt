@@ -43,7 +43,7 @@ fn main() {
 	} else {
 		for file in &files {
 			format(&std::fs::read_to_string(file).unwrap(), || {
-				std::fs::File::create(file).unwrap()
+				std::io::BufWriter::new(std::fs::File::create(file).unwrap())
 			});
 		}
 	}

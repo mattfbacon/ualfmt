@@ -17,84 +17,64 @@
 #![warn(clippy::pedantic)]
 #![deny(unsafe_code)]
 
-use std::io::Read as _;
-
-use logos::Logos as _;
-
-use self::interspersed::{AroundOrBetween, Interspersed};
-use self::span::{LineAndColumn, Span};
-use self::token::Token;
-use self::whitespace::Whitespace;
-
-mod format;
-mod interspersed;
-mod span;
-mod token;
-mod whitespace;
-
-type Tokens = Interspersed<Whitespace, (Token, Span)>;
+use std::fmt::{self, Display, Formatter};
+use std::io::{Read as _, Write as _};
 
 fn main() {
-	let mut input = String::new();
-	std::io::stdin().lock().read_to_string(&mut input).unwrap();
+	let mut source = String::new();
+	std::io::stdin().lock().read_to_string(&mut source).unwrap();
 
-	let lexer = Token::lexer(&input)
-		.spanned()
-		.map(|(token, span)| (token, span::Span::from(span)));
-
-	let mut tokens = Vec::new();
-
-	let mut prev_end = 0;
-	for (token, span) in lexer {
-		if token == Token::Error {
+	let formatted = match ualfmt::format(&source) {
+		Ok(formatted) => formatted,
+		Err(error) => {
 			eprintln!(
-				"cannot format, lexer error at {position}: {input:?}",
-				position = LineAndColumn::from_location_and_source(span.start, &input),
-				input = &input[span]
+				"lexer error: something's wrong at {}, specifically the input {:?}",
+				LineAndColumn::from_location_and_source(error.location, &source),
+				error.problem_text
 			);
 			return;
 		}
+	};
 
-		let whitespace_before = Span {
-			start: prev_end,
-			end: span.start,
-		};
-		let whitespace_before = Whitespace::from_text(&input[whitespace_before]);
-		tokens.push((whitespace_before, (token, span)));
-		prev_end = span.end;
-	}
-
-	let last_whitespace = Whitespace::from_text(
-		&input[Span {
-			start: prev_end,
-			end: input.len().try_into().unwrap(),
-		}],
-	);
-
-	let mut tokens = Tokens::from_rest_and_last(tokens, last_whitespace);
-
-	retag_labels(&mut tokens);
-
-	format::format(&mut tokens, &input);
-
-	write(std::io::stdout().lock(), &input, &tokens).unwrap();
+	std::io::stdout()
+		.lock()
+		.write_all(formatted.as_bytes())
+		.unwrap();
 }
 
-fn retag_labels(tokens: &mut Tokens) {
-	let mut betweens = tokens.betweens_mut().map(|(_, token, _)| token).peekable();
-	while let Some((between, _)) = betweens.next() {
-		if let (label, Some((Token::Colon, _))) = (between, betweens.peek()) {
-			*label = Token::LabelDeclaration;
-		}
+#[derive(Debug, Clone, Copy)]
+struct LineAndColumn {
+	/// Zero-indexed.
+	line: u32,
+	/// Zero-indexed.
+	column: u32,
+}
+
+impl LineAndColumn {
+	fn from_location_and_source(location: u32, source: &str) -> Self {
+		let location_usize: usize = location.try_into().unwrap();
+		let (line, line_start) = source
+			.bytes()
+			.enumerate()
+			.filter(|&(_byte_idx, byte)| byte == b'\n')
+			.enumerate()
+			.map(|(line_idx, (byte_idx, _byte))| (line_idx + 1, byte_idx + 1))
+			.take_while(|&(_line_idx, byte_idx)| byte_idx <= location_usize)
+			.last()
+			.unwrap_or((0, 0));
+		let line = line.try_into().unwrap();
+		let column = location - u32::try_from(line_start).unwrap();
+		Self { line, column }
 	}
 }
 
-fn write(mut writer: impl std::io::Write, source: &str, tokens: &Tokens) -> std::io::Result<()> {
-	tokens.iter_all().try_for_each(|item| {
-		let text = match item {
-			AroundOrBetween::Around(whitespace) => whitespace.text(),
-			AroundOrBetween::Between((_token, span)) => &source[*span],
-		};
-		writer.write_all(text.as_bytes())
-	})
+impl Display for LineAndColumn {
+	fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
+		write!(
+			formatter,
+			"{line}:{column}",
+			line = self.line + 1,
+			column = self.column + 1,
+		)
+	}
 }

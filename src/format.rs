@@ -1,3 +1,4 @@
+use crate::span::Span;
 use crate::token::Token;
 use crate::whitespace::Whitespace;
 use crate::Tokens;
@@ -14,23 +15,15 @@ enum Action {
 	Set(Whitespace),
 	SetIndentation(bool),
 	SetIfSpaces(Whitespace),
-	/*
-	SetIndentation(u8),
-	SetIndentationRange(RangeInclusive<u8>),
-	SetSpaces(u8),
-	*/
 	SetOneOrZeroSpaces,
 }
 
 impl Action {
-	fn apply(self, whitespace: &mut Whitespace, source: &str, span: crate::span::Span) {
+	fn apply(self, whitespace: &mut Whitespace, span: Span) {
 		match self {
 			Self::Unformatted { intentional } => {
 				if !intentional {
-					eprintln!(
-						"unformatted whitespace at span {}",
-						crate::span::LineAndColumn::from_location_and_source(span.start, source)
-					);
+					eprintln!("unformatted whitespace at span {span:?}");
 				}
 			}
 			Self::Set(set) => {
@@ -44,17 +37,6 @@ impl Action {
 					*whitespace = set;
 				}
 			}
-			/*
-			Self::SetIndentation(indentation) => {
-				whitespace.set_full(interner, None, Some(indentation..=indentation));
-			}
-			Self::SetIndentationRange(range) => {
-				whitespace.set_full(interner, None, Some(range));
-			}
-			Self::SetSpaces(spaces) => {
-				whitespace.set_full(interner, Some(spaces..=spaces), None);
-			}
-			*/
 			Self::SetOneOrZeroSpaces => {
 				if !whitespace.is_empty() {
 					*whitespace = Whitespace::OneSpace;
@@ -79,8 +61,7 @@ pub fn format(tokens: &mut Tokens, source: &str) {
 		};
 		action.apply(
 			whitespace,
-			source,
-			crate::span::Span {
+			Span {
 				start: before.map_or(0, |(_, span)| span.end),
 				end: after.map_or(source.len().try_into().unwrap(), |(_, span)| span.start),
 			},
@@ -120,9 +101,9 @@ fn format_single(before: Token, after: Token) -> Action {
 		(T::MiscBinaryOrUnaryOperator, _) => Action::SetOneOrZeroSpaces,
 		(_, T::LabelDeclaration) => Action::SetIndentation(false),
 		(_, T::Identifier | T::String) => Action::SetIndentation(true),
-		(_, T::Directive) => Action::Unformatted { intentional: true },
 		(_, T::LineComment) => Action::SetIfSpaces(W::TwoSpaces),
 		(T::Directive | T::Identifier, _) => Action::SetIfSpaces(W::OneSpace),
+		(_, T::Directive) => Action::Unformatted { intentional: true },
 		both_sides!(T::BlockComment) => Action::SetIfSpaces(W::OneSpace),
 		both_sides!(T::Error) => unreachable!(),
 		_ => Action::Unformatted { intentional: false },

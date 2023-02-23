@@ -53,7 +53,7 @@ _start:
 	mov x4, #HCR_VALUE
 	msr hcr_el2, x4
 
-// enable floating point and SVE
+	// enable floating point and SVE
 	msr cptr_el2, xzr
 
 	mov x4, #CPACR_VALUE

@@ -6,7 +6,7 @@ pub enum Token {
 
 	#[regex(r"(//|# )[^\n]*")]
 	LineComment,
-	#[regex(r"/\*([^*]*\*[^/])+/")]
+	#[regex(r"/\*([^*]|\*[^/])*\*/")]
 	BlockComment,
 
 	#[regex(r"\.[a-zA-Z_][a-zA-Z_0-9]*")]

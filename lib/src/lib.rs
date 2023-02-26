@@ -20,6 +20,7 @@
 use logos::Logos as _;
 
 use self::interspersed::{AroundOrBetween, Interspersed};
+use self::span::Location;
 pub use self::span::Span;
 use self::token::Token;
 use self::whitespace::Whitespace;
@@ -84,10 +85,14 @@ pub fn format(source: &str) -> Result<String, Error> {
 
 	retag_labels(&mut tokens);
 
+	let mut auxiliary_source = String::new();
+
 	format::format(&mut tokens, source);
 
+	format_block_comments(&mut tokens, source, &mut auxiliary_source);
+
 	let mut output = String::with_capacity(source.len() / 2);
-	write(&mut output, source, &tokens);
+	write(&mut output, source, &auxiliary_source, &tokens);
 	Ok(output)
 }
 
@@ -100,11 +105,65 @@ fn retag_labels(tokens: &mut Tokens) {
 	}
 }
 
-fn write(output: &mut String, source: &str, tokens: &Tokens) {
+fn count_indentation(s: &str) -> usize {
+	s.bytes().take_while(|&b| b == b'\t').count()
+}
+
+fn format_block_comments(tokens: &mut Tokens, source: &str, auxiliary_source: &mut String) {
+	let auxiliary_offset: Location = source.len().try_into().unwrap();
+	tokens.betweens_mut().enumerate().for_each(|(idx, item)| {
+		let (before, (Token::BlockComment, span), _after) = item else { return };
+
+		let content = &source[*span];
+
+		eprintln!("formatting block comment {content:?}");
+
+		let Some(indentation) = dbg!(before.indentation()).or_else(|| (idx == 0 && before == Whitespace::Empty).then_some(0)) else { return };
+
+		eprintln!("indentation: {indentation}");
+
+		if content
+			.split('\n')
+			.skip(1)
+			.all(|line| line.is_empty() || count_indentation(line) == indentation)
+		{
+			eprintln!("already properly indented");
+			return;
+		}
+
+		let start = auxiliary_offset + Location::try_from(auxiliary_source.len()).unwrap();
+
+		content.split('\n').enumerate().for_each(|(idx, line)| {
+			let indentation = if idx == 0 { 0 } else { indentation };
+			let line_start = count_indentation(line);
+			let line = &line[line_start..];
+
+			auxiliary_source.reserve(indentation + line.len() + 1);
+			auxiliary_source.extend(std::iter::repeat('\t').take(indentation));
+			auxiliary_source.push_str(line);
+			auxiliary_source.push('\n');
+		});
+
+		// remove final newline
+		auxiliary_source.truncate(auxiliary_source.len() - 1);
+
+		let end = auxiliary_offset + Location::try_from(auxiliary_source.len()).unwrap();
+
+		*span = Span { start, end };
+	});
+}
+
+fn write(output: &mut String, source: &str, auxiliary_source: &str, tokens: &Tokens) {
 	tokens.iter_all().for_each(|item| {
 		let text = match item {
 			AroundOrBetween::Around(whitespace) => whitespace.text(),
-			AroundOrBetween::Between((_token, span)) => &source[*span],
+			AroundOrBetween::Between((_token, span)) => {
+				if usize::try_from(span.start).unwrap() < source.len() {
+					&source[*span]
+				} else {
+					&auxiliary_source[span.move_left(source.len().try_into().unwrap())]
+				}
+			}
 		};
 		*output += text;
 	});

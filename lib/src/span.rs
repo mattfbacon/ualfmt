@@ -7,6 +7,32 @@ pub struct Span {
 	pub end: Location,
 }
 
+impl Span {
+	#[must_use]
+	pub fn move_left(self, by: u32) -> Self {
+		Self {
+			start: self.start - by,
+			end: self.end - by,
+		}
+	}
+
+	#[must_use]
+	pub fn remove_prefix(self, amount: u32) -> Self {
+		Self {
+			start: self.start + amount,
+			end: self.end,
+		}
+	}
+
+	#[must_use]
+	pub fn remove_suffix(self, amount: u32) -> Self {
+		Self {
+			start: self.start,
+			end: self.end - amount,
+		}
+	}
+}
+
 impl From<std::ops::Range<usize>> for Span {
 	fn from(range: std::ops::Range<usize>) -> Self {
 		Self {

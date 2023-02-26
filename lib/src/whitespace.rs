@@ -47,10 +47,12 @@ fn from_text_hot(text: &str) -> Option<Whitespace> {
 }
 
 impl Whitespace {
+	#[must_use]
 	pub fn is_empty(self) -> bool {
 		self == Self::Empty
 	}
 
+	#[must_use]
 	pub fn from_text(text: &str) -> Self {
 		if let Some(hot) = from_text_hot(text) {
 			return hot;
@@ -80,6 +82,7 @@ impl Whitespace {
 		}
 	}
 
+	#[must_use]
 	pub fn text(self) -> &'static str {
 		match self {
 			Self::Empty => "",
@@ -93,76 +96,7 @@ impl Whitespace {
 		}
 	}
 
-	/*
-	pub fn set_full(
-		&mut self,
-		interner: &mut impl Interner<MiniSpur>,
-		spaces_range: Option<RangeInclusive<u8>>,
-		indentation_range: Option<RangeInclusive<u8>>,
-	) {
-		enum OtherRepr {
-			Spaces(u8),
-			NewlinesAndIndentation { newlines: u8, indentation: u8 },
-		}
-
-		impl From<Whitespace> for OtherRepr {
-			fn from(whitespace: Whitespace) -> Self {
-				match whitespace {
-					Whitespace::Empty => Self::Spaces(0),
-					Whitespace::OneSpace => Self::Spaces(1),
-					Whitespace::TwoSpaces => Self::Spaces(2),
-					Whitespace::Tab => Self::NewlinesAndIndentation {
-						newlines: 0,
-						indentation: 1,
-					},
-					Whitespace::Newline => Self::NewlinesAndIndentation {
-						newlines: 1,
-						indentation: 0,
-					},
-					Whitespace::NewlineTab => Self::NewlinesAndIndentation {
-						newlines: 1,
-						indentation: 1,
-					},
-					Whitespace::TwoNewlines => Self::NewlinesAndIndentation {
-						newlines: 2,
-						indentation: 0,
-					},
-					Whitespace::TwoNewlinesTab => Self::NewlinesAndIndentation {
-						newlines: 2,
-						indentation: 1,
-					},
-				}
-			}
-		}
-
-		impl From<OtherRepr> for Whitespace {
-			fn from(repr: OtherRepr) -> Self {
-				match repr {
-
-				}
-			}
-		}
-
-		let spaces_range = spaces_range.unwrap_or(0..=1);
-		let indentation_range = indentation_range.unwrap_or(0..=1);
-
-		let mut repr = OtherRepr::from(*self);
-		match repr {
-			Self::Spaces(spaces) => {
-				*spaces = (*spaces).clamp_range(spaces_range);
-			}
-			Self::NewlinesAndIndentation {
-				newlines,
-				indentation,
-			} => {
-				*newlines = (*newlines).with_max(2);
-				*indentation = (*indentation).clamp_range(indentation_range);
-			}
-		}
-		*self = repr.into();
-	}
-	*/
-
+	#[must_use]
 	pub fn is_spaces(self) -> bool {
 		matches!(self, Self::Empty | Self::OneSpace | Self::TwoSpaces)
 	}
@@ -183,5 +117,14 @@ impl Whitespace {
 		}
 
 		pairs!(Newline => NewlineTab, TwoNewlines => TwoNewlinesTab);
+	}
+
+	#[must_use]
+	pub fn indentation(self) -> Option<usize> {
+		match self {
+			Whitespace::Empty | Whitespace::OneSpace | Whitespace::TwoSpaces => None,
+			Whitespace::Newline | Whitespace::TwoNewlines => Some(0),
+			Whitespace::Tab | Whitespace::NewlineTab | Whitespace::TwoNewlinesTab => Some(1),
+		}
 	}
 }

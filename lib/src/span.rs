@@ -34,6 +34,7 @@ impl Span {
 }
 
 impl From<std::ops::Range<usize>> for Span {
+	#[allow(clippy::cast_possible_truncation)] // already checked externally
 	fn from(range: std::ops::Range<usize>) -> Self {
 		Self {
 			start: range.start as u32,

@@ -14,7 +14,13 @@
 	rust_2018_idioms,
 	unused_qualifications
 )]
-#![warn(clippy::pedantic)]
+#![warn(
+	clippy::pedantic,
+	clippy::dbg_macro,
+	clippy::print_stderr,
+	clippy::print_stdout,
+	clippy::use_debug
+)]
 #![deny(unsafe_code)]
 
 use logos::Logos as _;
@@ -116,18 +122,13 @@ fn format_block_comments(tokens: &mut Tokens, source: &str, auxiliary_source: &m
 
 		let content = &source[*span];
 
-		eprintln!("formatting block comment {content:?}");
-
-		let Some(indentation) = dbg!(before.indentation()).or_else(|| (idx == 0 && before == Whitespace::Empty).then_some(0)) else { return };
-
-		eprintln!("indentation: {indentation}");
+		let Some(indentation) = before.indentation().or_else(|| (idx == 0 && before == Whitespace::Empty).then_some(0)) else { return };
 
 		if content
 			.split('\n')
 			.skip(1)
 			.all(|line| line.is_empty() || count_indentation(line) == indentation)
 		{
-			eprintln!("already properly indented");
 			return;
 		}
 

@@ -4,4 +4,5 @@ name = "ualfmt-lib"
 version = "0.1.0"
 
 [dependencies]
+itertools = "0.10"
 logos = "0.12"

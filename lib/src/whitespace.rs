@@ -48,11 +48,6 @@ fn from_text_hot(text: &str) -> Option<Whitespace> {
 
 impl Whitespace {
 	#[must_use]
-	pub fn is_empty(self) -> bool {
-		self == Self::Empty
-	}
-
-	#[must_use]
 	pub fn from_text(text: &str) -> Self {
 		if let Some(hot) = from_text_hot(text) {
 			return hot;

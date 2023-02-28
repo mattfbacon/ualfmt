@@ -1,7 +1,8 @@
-use crate::span::Span;
+#![allow(clippy::module_name_repetitions)]
+
+pub use crate::span::Span;
 use crate::token::Token;
 use crate::whitespace::Whitespace;
-use crate::Tokens;
 
 macro_rules! both_sides {
 	($($inner:pat),+ $(,)?) => {
@@ -9,103 +10,146 @@ macro_rules! both_sides {
 	};
 }
 
-#[derive(Debug, Clone)]
-enum Action {
-	Unformatted { intentional: bool },
-	Set(Whitespace),
-	SetIndentation(bool),
-	SetIfSpaces(Whitespace),
-	SetOneOrZeroSpaces,
+fn unformatted(old: &str) -> Whitespace {
+	Whitespace::from_text(old)
 }
 
-impl Action {
-	fn apply(self, whitespace: &mut Whitespace, span: Span) {
-		match self {
-			Self::Unformatted { intentional } => {
-				if !intentional {
-					eprintln!("unformatted whitespace at span {span:?}");
-				}
-			}
-			Self::Set(set) => {
-				*whitespace = set;
-			}
-			Self::SetIndentation(indentation) => {
-				whitespace.set_indentation(indentation);
-			}
-			Self::SetIfSpaces(set) => {
-				if whitespace.is_spaces() {
-					*whitespace = set;
-				}
-			}
-			Self::SetOneOrZeroSpaces => {
-				if !whitespace.is_empty() {
-					*whitespace = Whitespace::OneSpace;
-				}
-			}
-		}
+fn set_if_spaces(old: &str, set: Whitespace) -> Whitespace {
+	let ws = Whitespace::from_text(old);
+	if ws.is_spaces() {
+		set
+	} else {
+		ws
 	}
 }
 
-pub fn format(tokens: &mut Tokens, source: &str) {
-	tokens.arounds_mut().for_each(|arounds| {
-		let (before, whitespace, after) = arounds.into_tuple();
-		let action = match (before, after) {
-			// files that are only whitespace
-			(None, None) => Action::Set(Whitespace::Empty),
-			// leading whitespace
-			(None, Some((token, _))) => format_initial(token),
-			// trailing whitespace
-			(Some(_), None) => Action::Set(Whitespace::Newline),
-			// normal whitespace
-			(Some((before, _)), Some((after, _))) => format_single(before, after),
-		};
-		action.apply(
-			whitespace,
-			Span {
-				start: before.map_or(0, |(_, span)| span.end),
-				end: after.map_or(source.len().try_into().unwrap(), |(_, span)| span.start),
-			},
-		);
-	});
+fn set_one_or_zero_spaces(old: &str) -> Whitespace {
+	if old.is_empty() {
+		Whitespace::Empty
+	} else {
+		Whitespace::OneSpace
+	}
 }
 
-fn format_initial(token: Token) -> Action {
+fn set_indentation(old: &str, indentation: bool) -> Whitespace {
+	let mut ws = Whitespace::from_text(old);
+	ws.set_indentation(indentation);
+	ws
+}
+
+fn count_indentation(s: &str) -> usize {
+	s.bytes().take_while(|&b| b == b'\t').count()
+}
+
+pub fn format3(
+	[token1, token2, token3]: [Option<(Token, Span)>; 3],
+	source: &str,
+	output: &mut String,
+) {
+	match (token1, token2, token3) {
+		(None, Some((mut first, first_span)), Some((peek, _))) => {
+			if peek == Token::Colon {
+				first = Token::LabelDeclaration;
+			}
+
+			let leading = &source[..first_span.start as usize];
+			let leading = format_leading(leading, first);
+			output.push_str(leading);
+
+			post_process(true, leading, first, &source[first_span], output);
+		}
+		(Some((mut token1, span1)), Some((mut token2, span2)), peek) => {
+			if token2 == Token::Colon {
+				token1 = Token::LabelDeclaration;
+			}
+			if peek.map(|(peek, _span)| peek) == Some(Token::Colon) {
+				token2 = Token::LabelDeclaration;
+			}
+
+			let between = &source[span1.end as usize..span2.start as usize];
+			let between = format_between(between, token1, token2);
+			output.push_str(between);
+
+			post_process(false, between, token2, &source[span2], output);
+		}
+		(Some(_last), None, None) => {
+			output.push('\n');
+		}
+		_ => {}
+	}
+}
+
+fn format_leading(_leading: &str, token: Token) -> &str {
 	use Token as T;
 
 	match token {
-		T::Identifier => Action::Set(Whitespace::Tab),
+		T::Identifier => "\t",
 		T::Error => unreachable!(),
-		_ => Action::Set(Whitespace::Empty),
+		_ => "",
 	}
 }
 
-fn format_single(before: Token, after: Token) -> Action {
+fn format_between(between: &str, before: Token, after: Token) -> &str {
 	use {Token as T, Whitespace as W};
 
 	// clarity; one arm per rule and different rules may produce the same whitespace.
 	#[allow(clippy::match_same_arms)]
-	match (before, after) {
-		(T::Identifier | T::Directive | T::LabelDeclaration, T::Colon) => Action::Set(W::Empty),
-		(T::OpenRound | T::OpenSquare, _) | (_, T::CloseRound | T::CloseSquare) => {
-			Action::Set(W::Empty)
-		}
-		(T::Comma, _) => Action::Set(W::OneSpace),
-		(_, T::Comma) => Action::Set(W::Empty),
-		both_sides!(T::MiscBinaryOperator) => Action::Set(W::OneSpace),
-		(T::MiscUnaryOperator | T::MiscBinaryOrUnaryOperator, T::MiscUnaryOperator) => {
-			Action::Set(W::Empty)
-		}
-		(_, T::MiscUnaryOperator) => Action::Set(W::OneSpace),
-		(T::MiscUnaryOperator, _) => Action::Set(W::Empty),
-		(_, T::MiscBinaryOrUnaryOperator) => Action::Set(W::OneSpace),
-		(T::MiscBinaryOrUnaryOperator, _) => Action::SetOneOrZeroSpaces,
-		(_, T::LabelDeclaration) => Action::SetIndentation(false),
-		(_, T::Identifier | T::String) => Action::SetIndentation(true),
-		(_, T::LineComment) => Action::SetIfSpaces(W::TwoSpaces),
-		(T::Directive | T::Identifier, _) => Action::SetIfSpaces(W::OneSpace),
-		(_, T::Directive) => Action::Unformatted { intentional: true },
-		both_sides!(T::BlockComment) => Action::SetIfSpaces(W::OneSpace),
+	let new = match (before, after) {
+		(T::Identifier | T::Directive | T::LabelDeclaration, T::Colon) => W::Empty,
+		(T::OpenRound | T::OpenSquare, _) | (_, T::CloseRound | T::CloseSquare) => W::Empty,
+		(T::Comma, _) => W::OneSpace,
+		(_, T::Comma) => W::Empty,
+		both_sides!(T::MiscBinaryOperator) => W::OneSpace,
+		(T::MiscUnaryOperator | T::MiscBinaryOrUnaryOperator, T::MiscUnaryOperator) => W::Empty,
+		(_, T::MiscUnaryOperator) => W::OneSpace,
+		(T::MiscUnaryOperator, _) => W::Empty,
+		(_, T::MiscBinaryOrUnaryOperator) => W::OneSpace,
+		(T::MiscBinaryOrUnaryOperator, _) => set_one_or_zero_spaces(between),
+		(_, T::LabelDeclaration) => set_indentation(between, false),
+		(_, T::Identifier | T::String) => set_indentation(between, true),
+		(_, T::LineComment) => set_if_spaces(between, W::TwoSpaces),
+		(T::Directive | T::Identifier, _) => set_if_spaces(between, W::OneSpace),
+		(_, T::Directive) => unformatted(between),
+		both_sides!(T::BlockComment) => set_if_spaces(between, W::OneSpace),
 		both_sides!(T::Error) => unreachable!(),
-		_ => Action::Unformatted { intentional: false },
-	}
+		_ => unformatted(between),
+	};
+
+	new.text()
+}
+
+fn post_process(first: bool, before: &str, token: Token, token_text: &str, out: &mut String) {
+	if token != Token::BlockComment {
+		out.push_str(token_text);
+		return;
+	};
+
+	if let Some(indentation) = Whitespace::from_text(before)
+		.indentation()
+		.or_else(|| first.then_some(0))
+	{
+		token_text.split('\n').enumerate().for_each(|(idx, line)| {
+			let indentation = if idx == 0 { 0 } else { indentation };
+			let line_start = count_indentation(line);
+			let line = &line[line_start..];
+
+			out.reserve(indentation + line.len() + 1);
+			out.extend(std::iter::repeat('\t').take(indentation));
+			out.push_str(line);
+			out.push('\n');
+		});
+
+		// remove final newline
+		out.truncate(out.len() - 1);
+	} else {
+		out.reserve(token_text.len());
+
+		token_text.split('\n').for_each(|line| {
+			out.push_str(line);
+			out.push(' ');
+		});
+
+		// remove final space
+		out.truncate(out.len() - 1);
+	};
 }

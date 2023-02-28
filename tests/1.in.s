@@ -47,7 +47,7 @@
 .extern standard_init
 .extern main
 
-_start:
+	_start:
 	// armstub has already ensured that only core 0 gets here
 
 	// switch to EL1

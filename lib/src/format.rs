@@ -47,8 +47,8 @@ pub fn format3(
 	output: &mut String,
 ) {
 	match (token1, token2, token3) {
-		(None, Some((mut first, first_span)), Some((peek, _))) => {
-			if peek == Token::Colon {
+		(None, Some((mut first, first_span)), peek) => {
+			if peek.map(|(peek, _span)| peek) == Some(Token::Colon) {
 				first = Token::LabelDeclaration;
 			}
 
